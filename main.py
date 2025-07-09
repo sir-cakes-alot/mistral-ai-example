@@ -4,19 +4,9 @@ from typing import List, Dict
 import json
 from datetime import datetime
 import requests
-from serpapi import GoogleSearch
 from pathlib import Path
 import re
 import math
-
-# Safe namespace for math calculations
-SAFE_MATH_GLOBALS = {
-    '__builtins__': {},
-    'math': {
-        k: v for k, v in math.__dict__.items()
-        if k not in ('__import__', 'eval', 'exec', 'open', 'system', 'os')
-    }
-}
 
 def file_operation(operation: str, path: str, content: str = None) -> str:
     """
@@ -75,23 +65,43 @@ def get_current_time() -> str:
 
 def web_search(query: str) -> str:
     try:
+        # Wikipedia API endpoint for search
+        url = "https://en.wikipedia.org/w/api.php"
         params = {
-            "engine": "google_light",
-            "q": query,
-            "location": "United States",
-            "google_domain": "google.com",
-            "hl": "en",
-            "gl": "us",
-            "api_key": "1ecc19a04163d8c2586bc625dd31def97c712d8c6cd5a140dfd8f56cbd8ed881"
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "format": "json",
+            "srlimit": 3,  # Limit to top 3 results
+            "utf8": 1
         }
-        search = GoogleSearch(params)
-        results = search.get_dict()
-        organic_results = results.get("organic_results", [])
-        if organic_results:
-            return "\n".join([f"- {result.get('title', 'No title')}: {result.get('snippet', 'No snippet')}" for result in organic_results[:3]])
-        return f"No relevant results found for '{query}'."
+        headers = {"User-Agent": f"an ai has made this search, guided by a human({email}). this is not commercial/official. I released this *custom/personal project* to github(https://github.com/sir-cakes-alot/mistral-ai-example). (contact me: pleasework413@gmail.com)"}
+        
+        # Make the API request
+        response = requests.get(url, params=params, headers=headers)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        data = response.json()
+        
+        # Extract search results
+        search_results = data.get("query", {}).get("search", [])
+        if not search_results:
+            return f"No relevant Wikipedia articles found for '{query}'."
+        
+        # Format the results
+        results = []
+        for result in search_results:
+            title = result.get("title", "No title")
+            snippet = result.get("snippet", "No snippet")
+            # Remove HTML tags from snippet
+            snippet = re.sub(r"<[^>]+>", "", snippet)
+            results.append(f"- {title}: {snippet}")
+        
+        return "\n".join(results)
+    
+    except requests.RequestException as e:
+        return f"Error during Wikipedia search: {str(e)}. Try a different query."
     except Exception as e:
-        return f"Error during web search: {str(e)}. Try a different query or ask for coding help."
+        return f"Unexpected error during Wikipedia search: {str(e)}."
 
 # Tool schema for Mistral API
 tools = [
@@ -202,7 +212,7 @@ def execute_function(function_name: str, args: str) -> str:
 
 # Function to call Mistral API with streaming support and inline function calls
 def get_devstral_response(messages: List[Dict], temp) -> str:
-    api_key = 'xA8V8ExAdpYMLNNi7OXKm7KPaXCX6AIR'
+    api_key = 'get your own key!'
     if not api_key:
         return "Error: MISTRAL_API_KEY not set."
     
@@ -367,11 +377,13 @@ def get_devstral_response(messages: List[Dict], temp) -> str:
         return f"Error: {str(e)}"
 
 def main():
+    global email
     # Initialize message history
     messages: List[Dict] = []
     # Add system prompt at the start
     messages.append({"role": "system", "content": get_system_prompt()})
     temp = 0.15  # Default temperature
+    email=input('what is your email(or contact point)?: ')
     
     print("Devstral AI Chat (type 'exit' to quit, 'clear' to reset history)")
     print(f"Default temperature is set to {temp}. Type 'temp' to change it.")
